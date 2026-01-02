@@ -3,11 +3,18 @@
   "version": "1.0.0",
   "description": "EPIC Centre Analytics component for cross-application login analytics recording",
   "main": "dist/index.js",
-  "module": "dist/index.js",
+  "module": "dist/index.mjs",
   "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.mjs",
+      "require": "./dist/index.js"
+    }
+  },
   "scripts": {
-    "build": "tsc",
-    "dev": "tsc --watch",
+    "build": "tsup",
+    "dev": "tsup --watch",
     "prepare": "npm run build",
     "prepublishOnly": "npm run build"
   },
@@ -20,7 +27,8 @@
   },
   "devDependencies": {
     "@types/react": "^18.0.0",
-    "typescript": "^5.0.0"
+    "tsup": "^8.5.1",
+    "typescript": "^5.9.3"
   },
   "files": [
     "dist",
@@ -29,4 +37,3 @@
     "package.json"
   ]
 }
-
