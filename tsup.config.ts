@@ -3,7 +3,9 @@ import { defineConfig } from 'tsup';
 export default defineConfig({
   entry: ['src/index.ts'],
   format: ['esm', 'cjs'],
-  dts: true,
+  dts: {
+    resolve: false, // Skip resolving types from external dependencies
+  },
   splitting: false,
   sourcemap: true,
   clean: true,
@@ -11,4 +13,5 @@ export default defineConfig({
   bundle: true,
   outDir: 'dist',
 });
+
 
