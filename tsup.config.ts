@@ -4,7 +4,10 @@ export default defineConfig({
   entry: ['src/index.ts'],
   format: ['esm', 'cjs'],
   dts: {
-    resolve: false, // Skip resolving types from external dependencies
+    resolve: false,
+    compilerOptions: {
+      skipLibCheck: true,
+    },
   },
   splitting: false,
   sourcemap: true,
