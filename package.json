@@ -29,8 +29,6 @@
   },
   "files": [
     "dist",
-    "src",
-    "tsconfig.json",
     "package.json"
   ]
 }
