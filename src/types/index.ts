@@ -3,7 +3,8 @@ export type EpicAppName =
   | 'condition_repository'
   | 'epic_compliance'
   | 'epic_engage'
-  | 'epic_public';
+  | 'epic_public'
+  | 'epic_track';
 
 export interface EaoAnalyticsOptions {
   appName: EpicAppName;
