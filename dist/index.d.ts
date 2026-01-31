@@ -1,10 +1,18 @@
-type EpicAppName = 'epic_submit' | 'condition_repository' | 'epic_compliance' | 'epic_engage' | 'epic_public';
+type EpicAppName = 'epic_submit' | 'condition_repository' | 'epic_compliance' | 'epic_engage' | 'epic_public' | 'epic_track';
 interface EaoAnalyticsOptions {
     appName: EpicAppName;
     centreApiUrl: string;
     enabled?: boolean;
     onSuccess?: () => void;
     onError?: (error: Error) => void;
+    /**
+     * Optional manual auth state injection.
+     * Use this if your app does not use react-oidc-context's useAuth hook.
+     */
+    authState?: {
+        user: any;
+        isAuthenticated: boolean;
+    };
 }
 interface UserInfo {
     user_auth_guid: string;
@@ -14,6 +22,10 @@ interface EaoAnalyticsPayload {
     app_name: EpicAppName;
 }
 
+/**
+ * React hook to record user login analytics across EPIC applications
+ * Automatically records login analytics when user is authenticated
+ */
 /**
  * React hook to record user login analytics across EPIC applications
  * Automatically records login analytics when user is authenticated

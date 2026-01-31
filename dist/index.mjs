@@ -18,7 +18,6 @@ function extractUserInfo(user) {
 }
 
 // src/utils/apiClient.ts
-import axios from "axios";
 async function trackLogin(apiUrl, accessToken, payload) {
   if (!apiUrl) {
     throw new Error("EPIC.centre API URL is required");
@@ -29,28 +28,21 @@ async function trackLogin(apiUrl, accessToken, payload) {
   const baseUrl = apiUrl.endsWith("/") ? apiUrl.slice(0, -1) : apiUrl;
   const endpoint = `${baseUrl}/api/eao-analytics`;
   try {
-    await axios.post(
-      endpoint,
-      payload,
-      {
-        headers: {
-          "Authorization": `Bearer ${accessToken}`,
-          "Content-Type": "application/json"
-        },
-        timeout: 1e4
-      }
-    );
-  } catch (error) {
-    if (axios.isAxiosError(error)) {
-      const axiosError = error;
-      if (axiosError.response) {
-        throw new Error(
-          `EAO Analytics recording failed: ${axiosError.response.status} ${axiosError.response.statusText}`
-        );
-      } else if (axiosError.request) {
-        throw new Error("EAO Analytics recording failed: No response from server");
-      }
+    const response = await fetch(endpoint, {
+      method: "POST",
+      headers: {
+        "Authorization": `Bearer ${accessToken}`,
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify(payload),
+      keepalive: true
+    });
+    if (!response.ok) {
+      throw new Error(
+        `EAO Analytics recording failed: ${response.status} ${response.statusText}`
+      );
     }
+  } catch (error) {
     throw error instanceof Error ? error : new Error("EAO Analytics recording failed: Unknown error");
   }
 }
@@ -59,8 +51,21 @@ async function trackLogin(apiUrl, accessToken, payload) {
 var ANALYTICS_DEBOUNCE_MS = 5e3;
 var SESSION_STORAGE_KEY = "epic_eao_analytics_last_recorded";
 function trackAnalytics(options) {
-  const { appName, centreApiUrl, enabled = true, onSuccess, onError } = options;
-  const { user, isAuthenticated } = useAuth();
+  const { appName, centreApiUrl, enabled = true, onSuccess, onError, authState } = options;
+  let user;
+  let isAuthenticated;
+  let authContext = {};
+  try {
+    authContext = useAuth();
+  } catch (e) {
+  }
+  if (authState) {
+    user = authState.user;
+    isAuthenticated = authState.isAuthenticated;
+  } else {
+    user = authContext.user;
+    isAuthenticated = authContext.isAuthenticated;
+  }
   const [isRecording, setIsRecording] = useState(false);
   const [error, setError] = useState(null);
   const recordingRef = useRef(false);

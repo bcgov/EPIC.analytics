@@ -1,9 +1,7 @@
 "use strict";
-var __create = Object.create;
 var __defProp = Object.defineProperty;
 var __getOwnPropDesc = Object.getOwnPropertyDescriptor;
 var __getOwnPropNames = Object.getOwnPropertyNames;
-var __getProtoOf = Object.getPrototypeOf;
 var __hasOwnProp = Object.prototype.hasOwnProperty;
 var __export = (target, all) => {
   for (var name in all)
@@ -17,14 +15,6 @@ var __copyProps = (to, from, except, desc) => {
   }
   return to;
 };
-var __toESM = (mod, isNodeMode, target) => (target = mod != null ? __create(__getProtoOf(mod)) : {}, __copyProps(
-  // If the importer is in node compatibility mode or this is not an ESM
-  // file that has been converted to a CommonJS file using a Babel-
-  // compatible transform (i.e. "__esModule" has not been set), then set
-  // "default" to the CommonJS "module.exports" for node compatibility.
-  isNodeMode || !mod || !mod.__esModule ? __defProp(target, "default", { value: mod, enumerable: true }) : target,
-  mod
-));
 var __toCommonJS = (mod) => __copyProps(__defProp({}, "__esModule", { value: true }), mod);
 
 // src/index.ts
@@ -54,7 +44,6 @@ function extractUserInfo(user) {
 }
 
 // src/utils/apiClient.ts
-var import_axios = __toESM(require("axios"));
 async function trackLogin(apiUrl, accessToken, payload) {
   if (!apiUrl) {
     throw new Error("EPIC.centre API URL is required");
@@ -65,28 +54,21 @@ async function trackLogin(apiUrl, accessToken, payload) {
   const baseUrl = apiUrl.endsWith("/") ? apiUrl.slice(0, -1) : apiUrl;
   const endpoint = `${baseUrl}/api/eao-analytics`;
   try {
-    await import_axios.default.post(
-      endpoint,
-      payload,
-      {
-        headers: {
-          "Authorization": `Bearer ${accessToken}`,
-          "Content-Type": "application/json"
-        },
-        timeout: 1e4
-      }
-    );
-  } catch (error) {
-    if (import_axios.default.isAxiosError(error)) {
-      const axiosError = error;
-      if (axiosError.response) {
-        throw new Error(
-          `EAO Analytics recording failed: ${axiosError.response.status} ${axiosError.response.statusText}`
-        );
-      } else if (axiosError.request) {
-        throw new Error("EAO Analytics recording failed: No response from server");
-      }
+    const response = await fetch(endpoint, {
+      method: "POST",
+      headers: {
+        "Authorization": `Bearer ${accessToken}`,
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify(payload),
+      keepalive: true
+    });
+    if (!response.ok) {
+      throw new Error(
+        `EAO Analytics recording failed: ${response.status} ${response.statusText}`
+      );
     }
+  } catch (error) {
     throw error instanceof Error ? error : new Error("EAO Analytics recording failed: Unknown error");
   }
 }
@@ -95,8 +77,21 @@ async function trackLogin(apiUrl, accessToken, payload) {
 var ANALYTICS_DEBOUNCE_MS = 5e3;
 var SESSION_STORAGE_KEY = "epic_eao_analytics_last_recorded";
 function trackAnalytics(options) {
-  const { appName, centreApiUrl, enabled = true, onSuccess, onError } = options;
-  const { user, isAuthenticated } = (0, import_react_oidc_context.useAuth)();
+  const { appName, centreApiUrl, enabled = true, onSuccess, onError, authState } = options;
+  let user;
+  let isAuthenticated;
+  let authContext = {};
+  try {
+    authContext = (0, import_react_oidc_context.useAuth)();
+  } catch (e) {
+  }
+  if (authState) {
+    user = authState.user;
+    isAuthenticated = authState.isAuthenticated;
+  } else {
+    user = authContext.user;
+    isAuthenticated = authContext.isAuthenticated;
+  }
   const [isRecording, setIsRecording] = (0, import_react.useState)(false);
   const [error, setError] = (0, import_react.useState)(null);
   const recordingRef = (0, import_react.useRef)(false);

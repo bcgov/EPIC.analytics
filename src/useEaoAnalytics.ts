@@ -16,9 +16,33 @@ interface AnalyticsState {
  * React hook to record user login analytics across EPIC applications
  * Automatically records login analytics when user is authenticated
  */
+
+
+/**
+ * React hook to record user login analytics across EPIC applications
+ * Automatically records login analytics when user is authenticated
+ */
 export function trackAnalytics(options: EaoAnalyticsOptions) {
-  const { appName, centreApiUrl, enabled = true, onSuccess, onError } = options;
-  const { user, isAuthenticated } = useAuth();
+  const { appName, centreApiUrl, enabled = true, onSuccess, onError, authState } = options;
+  let user: any;
+  let isAuthenticated: boolean;
+
+  // Try to use useAuth hook, but don't crash if it's not available or fails
+  let authContext: any = {};
+  try {
+    authContext = useAuth();
+  } catch (e) {
+    // augment the error handling or just ignore if we expect to rely on authState
+  }
+
+  if (authState) {
+    user = authState.user;
+    isAuthenticated = authState.isAuthenticated;
+  } else {
+    user = authContext.user;
+    isAuthenticated = authContext.isAuthenticated;
+  }
+
   const [isRecording, setIsRecording] = useState(false);
   const [error, setError] = useState<Error | null>(null);
   const recordingRef = useRef(false);
@@ -32,16 +56,16 @@ export function trackAnalytics(options: EaoAnalyticsOptions) {
       return;
     }
 
-      const stored = sessionStorage.getItem(SESSION_STORAGE_KEY);
-      if (stored) {
-        const state: AnalyticsState = JSON.parse(stored);
-        const timeSinceLastRecord = Date.now() - state.lastRecorded;
-        
-        // If same app and recorded recently, skip
-        if (state.appName === appName && timeSinceLastRecord < ANALYTICS_DEBOUNCE_MS) {
-          return;
-        }
+    const stored = sessionStorage.getItem(SESSION_STORAGE_KEY);
+    if (stored) {
+      const state: AnalyticsState = JSON.parse(stored);
+      const timeSinceLastRecord = Date.now() - state.lastRecorded;
+
+      // If same app and recorded recently, skip
+      if (state.appName === appName && timeSinceLastRecord < ANALYTICS_DEBOUNCE_MS) {
+        return;
       }
+    }
 
     // Check if identity_provider is "idir" - only send analytics for IDIR users
     const identityProvider = user.profile?.identity_provider;
@@ -76,13 +100,13 @@ export function trackAnalytics(options: EaoAnalyticsOptions) {
         });
 
         // Store analytics state in sessionStorage
-          sessionStorage.setItem(
-            SESSION_STORAGE_KEY,
-            JSON.stringify({
-              lastRecorded: Date.now(),
-              appName,
-            } as AnalyticsState)
-          );
+        sessionStorage.setItem(
+          SESSION_STORAGE_KEY,
+          JSON.stringify({
+            lastRecorded: Date.now(),
+            appName,
+          } as AnalyticsState)
+        );
 
 
         onSuccess?.();
