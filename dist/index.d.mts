@@ -23,12 +23,18 @@ interface EaoAnalyticsPayload {
 }
 
 /**
- * React hook to record user login analytics across EPIC applications
- * Automatically records login analytics when user is authenticated
- */
-/**
- * React hook to record user login analytics across EPIC applications
- * Automatically records login analytics when user is authenticated
+ * Hook to record IDIR user login analytics for EPIC applications.
+ *
+ * Usage:
+ *   // Apps using react-oidc-context (Submit, Compliance, Conditions):
+ *   trackAnalytics({ appName: 'epic_submit', centreApiUrl: '...' });
+ *
+ *   // Apps using Redux (Engage, Track):
+ *   trackAnalytics({
+ *     appName: 'epic_engage',
+ *     centreApiUrl: '...',
+ *     authState: { user, isAuthenticated }
+ *   });
  */
 declare function trackAnalytics(options: EaoAnalyticsOptions): {
     isRecording: boolean;

@@ -74,51 +74,34 @@ async function trackLogin(apiUrl, accessToken, payload) {
 }
 
 // src/useEaoAnalytics.ts
-var ANALYTICS_DEBOUNCE_MS = 5e3;
-var SESSION_STORAGE_KEY = "epic_eao_analytics_last_recorded";
+var DEBOUNCE_MS = 5e3;
+var STORAGE_KEY = "epic_eao_analytics_last_recorded";
 function trackAnalytics(options) {
-  const { appName, centreApiUrl, enabled = true, onSuccess, onError, authState } = options;
-  let user;
-  let isAuthenticated;
-  let authContext = {};
-  try {
-    authContext = (0, import_react_oidc_context.useAuth)();
-  } catch (e) {
-  }
-  if (authState) {
-    user = authState.user;
-    isAuthenticated = authState.isAuthenticated;
-  } else {
-    user = authContext.user;
-    isAuthenticated = authContext.isAuthenticated;
-  }
+  const {
+    appName,
+    centreApiUrl,
+    enabled = true,
+    onSuccess,
+    onError,
+    authState
+  } = options;
+  const { user, isAuthenticated } = useAuthState(authState);
   const [isRecording, setIsRecording] = (0, import_react.useState)(false);
   const [error, setError] = (0, import_react.useState)(null);
-  const recordingRef = (0, import_react.useRef)(false);
+  const hasRecorded = (0, import_react.useRef)(false);
   (0, import_react.useEffect)(() => {
-    if (!enabled || !isAuthenticated || !user) {
+    if (!enabled || !isAuthenticated || !user || hasRecorded.current) {
       return;
     }
-    if (recordingRef.current) {
+    if (wasRecentlyRecorded(appName)) {
       return;
     }
-    const stored = sessionStorage.getItem(SESSION_STORAGE_KEY);
-    if (stored) {
-      const state = JSON.parse(stored);
-      const timeSinceLastRecord = Date.now() - state.lastRecorded;
-      if (state.appName === appName && timeSinceLastRecord < ANALYTICS_DEBOUNCE_MS) {
-        return;
-      }
-    }
-    if (!authState) {
-      const identityProvider = user.profile?.identity_provider;
-      if (identityProvider !== "idir") {
-        return;
-      }
+    if (!authState && !isIdirUser(user)) {
+      return;
     }
     const userInfo = extractUserInfo(user);
     if (!userInfo) {
-      console.warn("EAO Analytics: Could not extract user info from token");
+      console.warn("EAO Analytics: Could not extract user info");
       return;
     }
     const accessToken = user.access_token;
@@ -126,8 +109,9 @@ function trackAnalytics(options) {
       console.warn("EAO Analytics: No access token available");
       return;
     }
-    const performAnalytics = async () => {
-      recordingRef.current = true;
+    recordAnalytics();
+    async function recordAnalytics() {
+      hasRecorded.current = true;
       setIsRecording(true);
       setError(null);
       try {
@@ -135,29 +119,52 @@ function trackAnalytics(options) {
           user_auth_guid: userInfo.user_auth_guid,
           app_name: appName
         });
-        sessionStorage.setItem(
-          SESSION_STORAGE_KEY,
-          JSON.stringify({
-            lastRecorded: Date.now(),
-            appName
-          })
-        );
+        saveRecordedTimestamp(appName);
         onSuccess?.();
       } catch (err) {
-        const error2 = err instanceof Error ? err : new Error("Unknown error");
-        setError(error2);
-        onError?.(error2);
+        const e = err instanceof Error ? err : new Error("Unknown error");
+        setError(e);
+        onError?.(e);
       } finally {
         setIsRecording(false);
-        recordingRef.current = false;
+        hasRecorded.current = false;
       }
+    }
+  }, [isAuthenticated, user, appName, centreApiUrl, enabled, onSuccess, onError, authState]);
+  return { isRecording, error };
+}
+function useAuthState(authState) {
+  if (authState) {
+    return {
+      user: authState.user,
+      isAuthenticated: authState.isAuthenticated
     };
-    performAnalytics();
-  }, [isAuthenticated, user, appName, centreApiUrl, enabled, onSuccess, onError]);
+  }
+  const auth = (0, import_react_oidc_context.useAuth)();
   return {
-    isRecording,
-    error
+    user: auth.user,
+    isAuthenticated: auth.isAuthenticated
   };
+}
+function isIdirUser(user) {
+  return user?.profile?.identity_provider === "idir";
+}
+function wasRecentlyRecorded(appName) {
+  const stored = sessionStorage.getItem(STORAGE_KEY);
+  if (!stored) return false;
+  try {
+    const { lastRecorded, appName: storedApp } = JSON.parse(stored);
+    const elapsed = Date.now() - lastRecorded;
+    return storedApp === appName && elapsed < DEBOUNCE_MS;
+  } catch {
+    return false;
+  }
+}
+function saveRecordedTimestamp(appName) {
+  sessionStorage.setItem(
+    STORAGE_KEY,
+    JSON.stringify({ lastRecorded: Date.now(), appName })
+  );
 }
 // Annotate the CommonJS export names for ESM import in node:
 0 && (module.exports = {
