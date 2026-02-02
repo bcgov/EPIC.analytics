@@ -4,104 +4,152 @@ import { extractUserInfo } from './utils/tokenExtractor';
 import { trackLogin } from './utils/apiClient';
 import { EaoAnalyticsOptions } from './types';
 
-const ANALYTICS_DEBOUNCE_MS = 5000; // 5 seconds
-const SESSION_STORAGE_KEY = 'epic_eao_analytics_last_recorded';
-
-interface AnalyticsState {
-  lastRecorded: number;
-  appName: string;
-}
+const DEBOUNCE_MS = 5000;
+const STORAGE_KEY = 'epic_eao_analytics_last_recorded';
 
 /**
- * React hook to record user login analytics across EPIC applications
- * Automatically records login analytics when user is authenticated
+ * Hook to record IDIR user login analytics for EPIC applications.
+ *
+ * Usage:
+ *   // Apps using react-oidc-context (Submit, Compliance, Conditions):
+ *   trackAnalytics({ appName: 'epic_submit', centreApiUrl: '...' });
+ *
+ *   // Apps using Redux (Engage, Track):
+ *   trackAnalytics({
+ *     appName: 'epic_engage',
+ *     centreApiUrl: '...',
+ *     authState: { user, isAuthenticated }
+ *   });
  */
 export function trackAnalytics(options: EaoAnalyticsOptions) {
-  const { appName, centreApiUrl, enabled = true, onSuccess, onError } = options;
-  const { user, isAuthenticated } = useAuth();
+  const {
+    appName,
+    centreApiUrl,
+    enabled = true,
+    onSuccess,
+    onError,
+    authState,
+  } = options;
+
+  // Get user from either injected authState or react-oidc-context
+  const { user, isAuthenticated } = useAuthState(authState);
+
   const [isRecording, setIsRecording] = useState(false);
   const [error, setError] = useState<Error | null>(null);
-  const recordingRef = useRef(false);
+  const hasRecorded = useRef(false);
 
   useEffect(() => {
-    if (!enabled || !isAuthenticated || !user) {
+    // Skip if disabled, not authenticated, or already recording
+    if (!enabled || !isAuthenticated || !user || hasRecorded.current) {
       return;
     }
 
-    if (recordingRef.current) {
+    // Skip if we recorded recently (debounce)
+    if (wasRecentlyRecorded(appName)) {
       return;
     }
 
-      const stored = sessionStorage.getItem(SESSION_STORAGE_KEY);
-      if (stored) {
-        const state: AnalyticsState = JSON.parse(stored);
-        const timeSinceLastRecord = Date.now() - state.lastRecorded;
-        
-        // If same app and recorded recently, skip
-        if (state.appName === appName && timeSinceLastRecord < ANALYTICS_DEBOUNCE_MS) {
-          return;
-        }
-      }
-
-    // Check if identity_provider is "idir" - only send analytics for IDIR users
-    const identityProvider = user.profile?.identity_provider;
-    if (identityProvider !== 'idir') {
+    // For apps using react-oidc-context, check if user is IDIR
+    // For apps using authState (Redux), assume IDIR-only
+    if (!authState && !isIdirUser(user)) {
       return;
     }
 
-    // Extract user info from token
+    // Extract user info
     const userInfo = extractUserInfo(user);
     if (!userInfo) {
-      console.warn('EAO Analytics: Could not extract user info from token');
+      console.warn('EAO Analytics: Could not extract user info');
       return;
     }
 
-    // Get access token
     const accessToken = user.access_token;
     if (!accessToken) {
       console.warn('EAO Analytics: No access token available');
       return;
     }
 
-    // Record analytics
-    const performAnalytics = async () => {
-      recordingRef.current = true;
+    // Record the analytics
+    recordAnalytics();
+
+    async function recordAnalytics() {
+      hasRecorded.current = true;
       setIsRecording(true);
       setError(null);
 
       try {
         await trackLogin(centreApiUrl, accessToken, {
-          user_auth_guid: userInfo.user_auth_guid,
+          user_auth_guid: userInfo!.user_auth_guid,
           app_name: appName,
         });
 
-        // Store analytics state in sessionStorage
-          sessionStorage.setItem(
-            SESSION_STORAGE_KEY,
-            JSON.stringify({
-              lastRecorded: Date.now(),
-              appName,
-            } as AnalyticsState)
-          );
-
-
+        saveRecordedTimestamp(appName);
         onSuccess?.();
       } catch (err) {
-        const error = err instanceof Error ? err : new Error('Unknown error');
-        setError(error);
-        onError?.(error);
+        const e = err instanceof Error ? err : new Error('Unknown error');
+        setError(e);
+        onError?.(e);
       } finally {
         setIsRecording(false);
-        recordingRef.current = false;
+        hasRecorded.current = false;
       }
+    }
+  }, [isAuthenticated, user, appName, centreApiUrl, enabled, onSuccess, onError, authState]);
+
+  return { isRecording, error };
+}
+
+// --- Helper Functions ---
+
+/**
+ * Get user authentication state from either injected authState or useAuth hook.
+ */
+function useAuthState(authState?: EaoAnalyticsOptions['authState']) {
+  // If authState is provided, use it directly
+  if (authState) {
+    return {
+      user: authState.user,
+      isAuthenticated: authState.isAuthenticated,
     };
+  }
 
-    performAnalytics();
-  }, [isAuthenticated, user, appName, centreApiUrl, enabled, onSuccess, onError]);
-
+  // Otherwise, use the react-oidc-context hook
+  // This will throw if not wrapped in AuthProvider, which is expected
+  const auth = useAuth();
   return {
-    isRecording,
-    error,
+    user: auth.user,
+    isAuthenticated: auth.isAuthenticated,
   };
 }
 
+/**
+ * Check if user has IDIR identity provider.
+ */
+function isIdirUser(user: any): boolean {
+  return user?.profile?.identity_provider === 'idir';
+}
+
+/**
+ * Check if analytics was recorded recently for this app (within debounce window).
+ */
+function wasRecentlyRecorded(appName: string): boolean {
+  const stored = sessionStorage.getItem(STORAGE_KEY);
+  if (!stored) return false;
+
+  try {
+    const { lastRecorded, appName: storedApp } = JSON.parse(stored);
+    const elapsed = Date.now() - lastRecorded;
+    return storedApp === appName && elapsed < DEBOUNCE_MS;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Save the current timestamp as last recorded for this app.
+ */
+function saveRecordedTimestamp(appName: string): void {
+  sessionStorage.setItem(
+    STORAGE_KEY,
+    JSON.stringify({ lastRecorded: Date.now(), appName })
+  );
+}
