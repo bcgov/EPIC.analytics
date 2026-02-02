@@ -68,9 +68,12 @@ export function trackAnalytics(options: EaoAnalyticsOptions) {
     }
 
     // Check if identity_provider is "idir" - only send analytics for IDIR users
-    const identityProvider = user.profile?.identity_provider;
-    if (identityProvider !== 'idir') {
-      return;
+    // Skip this check if authState was manually injected (assumes IDIR-only app)
+    if (!authState) {
+      const identityProvider = user.profile?.identity_provider;
+      if (identityProvider !== 'idir') {
+        return;
+      }
     }
 
     // Extract user info from token

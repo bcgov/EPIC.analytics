@@ -110,9 +110,11 @@ function trackAnalytics(options) {
         return;
       }
     }
-    const identityProvider = user.profile?.identity_provider;
-    if (identityProvider !== "idir") {
-      return;
+    if (!authState) {
+      const identityProvider = user.profile?.identity_provider;
+      if (identityProvider !== "idir") {
+        return;
+      }
     }
     const userInfo = extractUserInfo(user);
     if (!userInfo) {
