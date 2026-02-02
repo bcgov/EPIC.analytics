@@ -1,99 +1,92 @@
-# EPIC.analytics
+# @epic/centre-analytics
 
-Repository to have analytics related components for EPIC System
+Drop-in React component to record IDIR user login analytics across EPIC applications.
 
 ## Installation
 
-### Install from GitHub
-
-Add to your application's `package.json`:
-
-```json
-{
-  "dependencies": {
-    "@epic/centre-analytics": "git+https://github.com/bcgov/EPIC.analytics.git#main"
-  }
-}
-```
-
-Then run:
 ```bash
-npm install
+npm install @epic/centre-analytics
 ```
 
-## Usage
+## Quick Start
 
-### Basic Usage
+Just render the `<EaoAnalytics />` component anywhere in your app:
 
-```typescript
-import { trackAnalytics } from '@epic/centre-analytics';
+```tsx
+import { EaoAnalytics } from '@epic/centre-analytics';
 
-function RouterProviderWithAuthContext() {
-  const { isAuthenticated } = useAuth();
-  
-  trackAnalytics({
-    appName: 'epic_submit',
-    centreApiUrl: 'https://centre-api.example.com',
-  });
-  
-  // ... rest of component
+function App() {
+  return (
+    <>
+      <EaoAnalytics appName="epic_submit" centreApiUrl="https://your-api.com" />
+      {/* ...rest of your app */}
+    </>
+  );
 }
 ```
 
-### With Configuration
+That's it! The component handles everything automatically.
 
-```typescript
-trackAnalytics({
-  appName: 'epic_submit',
-  centreApiUrl: process.env.VITE_CENTRE_API_URL,
-  enabled: isAuthenticated,
-  onSuccess: () => {
-    console.log('Analytics recorded successfully');
-  },
-  onError: (error) => {
-    console.error('Analytics recording failed:', error);
-  },
-});
+---
+
+## Usage by App Type
+
+### Apps using `react-oidc-context` (Submit, Compliance, Conditions)
+
+```tsx
+<EaoAnalytics appName="epic_submit" centreApiUrl="https://your-api.com" />
 ```
 
-## API
+### Apps using Redux (Engage, Track)
 
-### `trackAnalytics(options: CentreAnalyticsOptions)`
+```tsx
+import { EaoAnalytics, AnalyticsUser } from '@epic/centre-analytics';
+import { useAppSelector } from './hooks';
 
-#### Options
+function App() {
+  const bearerToken = useAppSelector((state) => state.user.bearerToken);
+  const isAuthenticated = useAppSelector((state) => state.user.authentication.authenticated);
+  const userDetail = useAppSelector((state) => state.user.userDetail);
 
-- `appName` (required): The application name (`'epic_submit'`, `'condition_repository'`, `'epic_compliance'`, `'epic_engage'`, `'epic_public'`)
-- `centreApiUrl` (required): Base URL of EPIC.centre API
-- `enabled` (optional): Enable/disable analytics recording (default: `true`)
-- `onSuccess` (optional): Callback on successful recording
-- `onError` (optional): Callback on recording error
+  const user: AnalyticsUser = {
+    access_token: bearerToken || '',
+    profile: { preferred_username: userDetail.preferred_username },
+  };
 
-#### Returns
-
-- `isRecording`: Boolean indicating if analytics recording is in progress
-- `error`: Error object if recording failed
-
-## Features
-
-- Automatically extracts user info from OIDC token
-- Maps application name to app_id
-- Debounces analytics recording (max once per 5 seconds per session)
-- Silent error handling (won't break your app)
-- TypeScript support
-
-## Environment Variables
-
-Add to your application's environment configuration:
-
-```env
-VITE_CENTRE_API_URL=https://centre-api.example.com
+  return (
+    <>
+      <EaoAnalytics
+        appName="epic_engage"
+        centreApiUrl="https://your-api.com"
+        authState={{ user, isAuthenticated }}
+      />
+      {/* ...rest of app */}
+    </>
+  );
+}
 ```
 
-## Application Names
+---
 
-- `epic_submit` - EPIC.submit
-- `condition_repository` - EPIC.conditions
-- `epic_compliance` - EPIC.compliance
-- `epic_engage` - epic-engage
-- `epic_public` - epic-public
+## Props
 
+| Prop | Type | Required | Description |
+|------|------|----------|-------------|
+| `appName` | `EpicAppName` | Yes | App identifier |
+| `centreApiUrl` | `string` | Yes | EPIC.centre API URL |
+| `enabled` | `boolean` | No | Enable/disable (default: true) |
+| `authState` | `object` | No | Manual auth for Redux apps |
+| `onSuccess` | `() => void` | No | Success callback |
+| `onError` | `(error) => void` | No | Error callback |
+
+## Valid App Names
+
+`epic_submit` | `epic_compliance` | `condition_repository` | `epic_engage` | `epic_track` | `epic_public`
+
+---
+
+## Notes
+
+- **IDIR Only**: Only records analytics for IDIR users
+- **Debouncing**: Won't re-record within 5 seconds
+- **Optional Dependency**: `react-oidc-context` is optional if you provide `authState`
